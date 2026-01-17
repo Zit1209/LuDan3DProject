@@ -45,7 +45,10 @@ public class PlayerMovement : MonoBehaviour
     private bool climbingDisabled = false;
     private float climbDisableTimer = 0f;
 
-    private enum MovementState { Ground, Air, Climb }
+    private bool isInKnockback = false;
+    private float knockbackTimer = 0f;
+
+    private enum MovementState { Ground, Air, Climb, Knockback }
     private MovementState currentState = MovementState.Ground;
 
     private void Awake()
@@ -85,8 +88,14 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
+        UpdateKnockbackTimer();
         UpdateClimbDisableTimer();
-        ReadInput();
+        
+        if (!isInKnockback)
+        {
+            ReadInput();
+        }
+        
         CheckGrounded();
         DetectWall();
         
@@ -94,6 +103,19 @@ public class PlayerMovement : MonoBehaviour
         
         UpdateState();
         HandleMovement();
+    }
+
+    private void UpdateKnockbackTimer()
+    {
+        if (isInKnockback)
+        {
+            knockbackTimer -= Time.deltaTime;
+            if (knockbackTimer <= 0f)
+            {
+                isInKnockback = false;
+                currentState = MovementState.Air;
+            }
+        }
     }
 
     private void UpdateClimbDisableTimer()
@@ -119,12 +141,18 @@ public class PlayerMovement : MonoBehaviour
 
     private void CheckGrounded()
     {
+        if (isInKnockback)
+        {
+            isGrounded = false;
+            return;
+        }
+        
         isGrounded = controller.isGrounded;
     }
 
     private void DetectWall()
     {
-        if (climbingDisabled)
+        if (climbingDisabled || isInKnockback)
         {
             isTouchingWall = false;
             return;
@@ -159,12 +187,15 @@ public class PlayerMovement : MonoBehaviour
 
     private void OnJumpPerformed(InputAction.CallbackContext context)
     {
-        jumpRequested = true;
+        if (!isInKnockback)
+        {
+            jumpRequested = true;
+        }
     }
 
     private void ProcessJump()
     {
-        if (!jumpRequested)
+        if (!jumpRequested || isInKnockback)
             return;
 
         jumpRequested = false;
@@ -210,6 +241,9 @@ public class PlayerMovement : MonoBehaviour
 
     private void UpdateState()
     {
+        if (isInKnockback)
+            return;
+
         switch (currentState)
         {
             case MovementState.Ground:
@@ -263,6 +297,10 @@ public class PlayerMovement : MonoBehaviour
             case MovementState.Climb:
                 HandleClimbingMovement();
                 break;
+
+            case MovementState.Knockback:
+                HandleKnockbackMovement();
+                break;
         }
 
         controller.Move(velocity * Time.deltaTime);
@@ -315,6 +353,11 @@ public class PlayerMovement : MonoBehaviour
         velocity = climbDirection * speed;
     }
 
+    private void HandleKnockbackMovement()
+    {
+        ApplyGravity();
+    }
+
     private void ApplyGravity()
     {
         float gravityMultiplier = velocity.y > 0f ? risingGravityMultiplier : fallingGravityMultiplier;
@@ -326,6 +369,9 @@ public class PlayerMovement : MonoBehaviour
 
     private void OnControllerColliderHit(ControllerColliderHit hit)
     {
+        if (isInKnockback)
+            return;
+
         if (currentState == MovementState.Air)
         {
             if (Vector3.Dot(hit.normal, Vector3.up) < 0.1f)
@@ -359,6 +405,20 @@ public class PlayerMovement : MonoBehaviour
     {
         velocity = direction * force;
         velocity.y = Mathf.Max(velocity.y, jumpImpulse * 0.5f);
+    }
+
+    public void EnterKnockbackState(Vector3 direction, float force, float duration)
+    {
+        isInKnockback = true;
+        knockbackTimer = duration;
+        currentState = MovementState.Knockback;
+        
+        climbingDisabled = true;
+        climbDisableTimer = duration;
+        
+        velocity = direction * force;
+        
+        moveInput = Vector2.zero;
     }
 
     public bool IsClimbing()
