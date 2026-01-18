@@ -67,5 +67,5 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "LuDan3DProject.slnx"
+    "dotnet.defaultSolution": "Ludan3DProject.slnx"
 }

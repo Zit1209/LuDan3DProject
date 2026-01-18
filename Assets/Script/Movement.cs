@@ -7,8 +7,6 @@ public class PlayerMovement : MonoBehaviour
     [Header("Ground Movement")]
     [SerializeField] private float walkSpeed = 5f;
     [SerializeField] private float runSpeed = 8f;
-    [SerializeField] private float groundAcceleration = 20f;
-    [SerializeField] private float groundDeceleration = 25f;
 
     [Header("Jump Settings")]
     [SerializeField] private float jumpImpulse = 12f;
@@ -27,6 +25,9 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float wallDetectionDistance = 0.6f;
     [SerializeField] private float wallJumpForce = 10f;
     [SerializeField] private LayerMask wallLayer = -1;
+
+    [Header("Animation")]
+    [SerializeField] private Animator animator;
 
     [Header("Input Actions")]
     [SerializeField] private InputActionAsset inputAsset;
@@ -51,9 +52,28 @@ public class PlayerMovement : MonoBehaviour
     private enum MovementState { Ground, Air, Climb, Knockback }
     private MovementState currentState = MovementState.Ground;
 
+    private int speedHash;
+    private int directionHash;
+    private int jumpHash;
+    private int restHash;
+    private int jumpHeightHash;
+    private int gravityCeHash;
+
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
+        
+        if (animator == null)
+        {
+            animator = GetComponentInChildren<Animator>();
+        }
+
+        speedHash = Animator.StringToHash("Speed");
+        directionHash = Animator.StringToHash("Direction");
+        jumpHash = Animator.StringToHash("Jump");
+        restHash = Animator.StringToHash("Rest");
+        jumpHeightHash = Animator.StringToHash("JumpHeight");
+        gravityCeHash = Animator.StringToHash("GravityCe");
         
         if (inputAsset != null)
         {
@@ -103,6 +123,31 @@ public class PlayerMovement : MonoBehaviour
         
         UpdateState();
         HandleMovement();
+        UpdateAnimator();
+    }
+
+    private void UpdateAnimator()
+    {
+        if (animator == null) return;
+        
+        float speedValue = 0f;
+        
+        if (moveInput.magnitude > 0.1f)
+        {
+            speedValue = isRunning ? 1f : 0.5f; 
+        }
+        
+        animator.SetFloat(speedHash, speedValue);
+        animator.SetFloat(directionHash, moveInput.x);
+        
+        bool isResting = isGrounded && moveInput.magnitude < 0.1f && !isInKnockback;
+        animator.SetBool(restHash, isResting);
+        
+        float jumpHeight = isGrounded ? 0f : Mathf.Clamp01((velocity.y + 10f) / 20f);
+        animator.SetFloat(jumpHeightHash, jumpHeight);
+
+        float gravityValue = isGrounded ? 0f : Mathf.Clamp01(-velocity.y / maxFallSpeed);
+        animator.SetFloat(gravityCeHash, gravityValue);
     }
 
     private void UpdateKnockbackTimer()
@@ -228,6 +273,11 @@ public class PlayerMovement : MonoBehaviour
             velocity.z += worldDirection.z * runSpeed * (forwardJumpBoost - 1f);
         }
 
+        if (animator != null)
+        {
+            animator.SetTrigger(jumpHash);
+        }
+
         currentState = MovementState.Air;
     }
 
@@ -235,6 +285,11 @@ public class PlayerMovement : MonoBehaviour
     {
         velocity = wallNormal * wallJumpForce;
         velocity.y = jumpImpulse * 0.9f;
+
+        if (animator != null)
+        {
+            animator.SetTrigger(jumpHash);
+        }
 
         currentState = MovementState.Air;
     }
@@ -311,12 +366,9 @@ public class PlayerMovement : MonoBehaviour
         float targetSpeed = isRunning ? runSpeed : walkSpeed;
         Vector3 inputDirection = new Vector3(moveInput.x, 0f, moveInput.y);
         Vector3 worldDirection = transform.TransformDirection(inputDirection);
-        Vector3 targetVelocity = worldDirection * targetSpeed;
-
-        float acceleration = moveInput.magnitude > 0.1f ? groundAcceleration : groundDeceleration;
-
-        velocity.x = Mathf.MoveTowards(velocity.x, targetVelocity.x, acceleration * Time.deltaTime);
-        velocity.z = Mathf.MoveTowards(velocity.z, targetVelocity.z, acceleration * Time.deltaTime);
+        
+        velocity.x = worldDirection.x * targetSpeed;
+        velocity.z = worldDirection.z * targetSpeed;
 
         if (isGrounded && velocity.y <= 0f)
         {
@@ -333,10 +385,10 @@ public class PlayerMovement : MonoBehaviour
         float targetSpeed = isRunning ? runSpeed : walkSpeed;
         Vector3 inputDirection = new Vector3(moveInput.x, 0f, moveInput.y);
         Vector3 worldDirection = transform.TransformDirection(inputDirection);
-        Vector3 targetVelocity = worldDirection * targetSpeed * airControlStrength;
+        Vector3 airVelocity = worldDirection * targetSpeed * airControlStrength;
 
-        velocity.x = Mathf.MoveTowards(velocity.x, velocity.x + targetVelocity.x, groundAcceleration * airControlStrength * Time.deltaTime);
-        velocity.z = Mathf.MoveTowards(velocity.z, velocity.z + targetVelocity.z, groundAcceleration * airControlStrength * Time.deltaTime);
+        velocity.x += airVelocity.x * Time.deltaTime;
+        velocity.z += airVelocity.z * Time.deltaTime;
 
         ApplyGravity();
     }

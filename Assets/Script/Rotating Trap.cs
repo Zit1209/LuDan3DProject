@@ -8,6 +8,7 @@ public class RotatingTrapZone : MonoBehaviour
     
     [Header("Trap Settings")]
     [SerializeField] private GameObject trapObject;
+    [SerializeField] private RotationAxis rotationAxis = RotationAxis.Z;
     [SerializeField] private float rotationSpeed = 100f;
     
     [Header("Knockback Settings")]
@@ -16,6 +17,13 @@ public class RotatingTrapZone : MonoBehaviour
     private BoxCollider triggerZone;
     private bool trapActive = false;
     private RotatingTrap rotatingTrapComponent;
+
+    public enum RotationAxis
+    {
+        X,
+        Y,
+        Z
+    }
 
     private void Awake()
     {
@@ -30,7 +38,7 @@ public class RotatingTrapZone : MonoBehaviour
                 rotatingTrapComponent = trapObject.AddComponent<RotatingTrap>();
             }
             
-            rotatingTrapComponent.Initialize(rotationSpeed, knockbackForce, playerTag);
+            rotatingTrapComponent.Initialize(rotationSpeed, knockbackForce, playerTag, rotationAxis);
             rotatingTrapComponent.SetActive(false);
         }
     }
@@ -66,12 +74,14 @@ public class RotatingTrap : MonoBehaviour
     private float knockbackForce;
     private string playerTag;
     private bool isActive = false;
+    private RotatingTrapZone.RotationAxis rotationAxis;
 
-    public void Initialize(float speed, float knockback, string tag)
+    public void Initialize(float speed, float knockback, string tag, RotatingTrapZone.RotationAxis axis)
     {
         rotationSpeed = speed;
         knockbackForce = knockback;
         playerTag = tag;
+        rotationAxis = axis;
         
         Collider col = GetComponent<Collider>();
         if (col == null)
@@ -98,7 +108,22 @@ public class RotatingTrap : MonoBehaviour
     {
         if (isActive)
         {
-            transform.Rotate(0f, 0f, rotationSpeed * Time.deltaTime);
+            Vector3 rotationVector = Vector3.zero;
+            
+            switch (rotationAxis)
+            {
+                case RotatingTrapZone.RotationAxis.X:
+                    rotationVector = new Vector3(rotationSpeed * Time.deltaTime, 0f, 0f);
+                    break;
+                case RotatingTrapZone.RotationAxis.Y:
+                    rotationVector = new Vector3(0f, rotationSpeed * Time.deltaTime, 0f);
+                    break;
+                case RotatingTrapZone.RotationAxis.Z:
+                    rotationVector = new Vector3(0f, 0f, rotationSpeed * Time.deltaTime);
+                    break;
+            }
+            
+            transform.Rotate(rotationVector);
         }
     }
 
